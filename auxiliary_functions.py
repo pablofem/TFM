@@ -1,3 +1,4 @@
+from statsmodels.tsa.seasonal import seasonal_decompose
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -74,4 +75,39 @@ def plot_stacked_barchart(df, columns, frequency='M', figsize=(20, 6),
     plt.legend(title='Variables', bbox_to_anchor=(1.05, 1), loc='upper center')
 
     plt.tight_layout()
+    plt.show()
+
+
+def make_general_boxplots(df, figsize):
+    # Get numeric columns
+    numeric_columns = df.select_dtypes(include=['number']).columns
+
+    # Set up the grid
+    num_plots = len(numeric_columns)
+    num_cols = 3
+    num_rows = (num_plots + num_cols - 1) // num_cols
+
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 5 * num_rows))
+    axes = axes.flatten()
+
+    # Loop through numeric columns and create box plots
+    for i, column in enumerate(numeric_columns):
+        sns.boxplot(x='city_name', y=column, data=df, ax=axes[i], palette='Set3')
+        axes[i].set_title(column)
+        axes[i].figure.set_size_inches(*figsize)
+
+    # Remove empty subplots if any
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.show()
+
+
+def make_seasonal_decomposition(input_data, model='multiplicative',
+                                period=365*24):
+    decomposition= seasonal_decompose(input_data, model=model, period=period)  # 'additive' 'multiplicative'
+    plt.rc("figure", figsize=(16, 6))
+    plt.rc("font", size=10)
+    decomposition.plot()
     plt.show()

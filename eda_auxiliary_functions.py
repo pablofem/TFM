@@ -2,7 +2,6 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 
 
 def make_general_histograms(df, figsize=(20, 12), xlabel="", group_cols_N=3, columns=None):
@@ -111,3 +110,82 @@ def make_seasonal_decomposition(input_data, model='multiplicative',
     plt.rc("font", size=10)
     decomposition.plot()
     plt.show()
+
+
+def make_categories_pie_chart(df):
+    # Select all text columns
+    text_columns = df.select_dtypes(include='object')
+
+    # Plot pie charts for each text column
+    for col in text_columns.columns:
+        plt.figure(figsize=(12, 3))
+        value_counts = text_columns[col].value_counts(normalize=True) * 100
+        labels = [f'{label}: {pct:.1f}%' for label, pct in zip(value_counts.index, value_counts.values)]
+        fontsize = 6 if len(value_counts) > 20 else 10
+        plt.pie(value_counts, labels=labels, autopct='%1.1f%%', startangle=140)
+        plt.title(f'Distribución de categorías en {col}')
+        plt.legend(labels, loc="best", fontsize=fontsize)
+        plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+        plt.show()
+
+
+def count_outliers(df):
+    """
+    This function takes a pandas DataFrame and returns a new DataFrame with the count of outliers 
+    for each numerical column.
+    
+    An outlier is defined as a data point that is below Q1 - 1.5 * IQR or above Q3 + 1.5 * IQR.
+    
+    Parameters:
+    df (pd.DataFrame): The input DataFrame
+    
+    Returns:
+    pd.DataFrame: A DataFrame with the count of outliers for each numerical column
+    """
+    
+    outlier_counts = {}
+    
+    # Iterate through each numerical column
+    for column in df.select_dtypes(include=['number']).columns:
+        Q1 = df[column].quantile(0.25)
+        Q3 = df[column].quantile(0.75)
+        IQR = Q3 - Q1
+        
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        outliers = ((df[column] < lower_bound) | (df[column] > upper_bound)).sum()
+        outlier_counts[column] = outliers
+    
+    outliers_df = pd.DataFrame(list(outlier_counts.items()), columns=['column', 'outlier_count'])
+    outliers_df = outliers_df.sort_values("outlier_count", ascending=False)
+    return outliers_df
+
+
+def replace_outliers(df):
+    # Create a copy of the DataFrame to avoid modifying the original one
+    df_copy = df.copy()
+    
+    # Select numerical columns
+    numerical_cols = df_copy.select_dtypes(include=['number']).columns
+    
+    for col in numerical_cols:
+        # Calculate Q1 (25th percentile) and Q3 (75th percentile)
+        Q1 = df_copy[col].quantile(0.25)
+        Q3 = df_copy[col].quantile(0.75)
+        
+        # Calculate IQR (Interquartile Range)
+        IQR = Q3 - Q1
+        
+        # Define lower and upper bounds for outliers
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        # Identify outliers
+        outliers = (df_copy[col] < lower_bound) | (df_copy[col] > upper_bound)
+        
+        # Replace outliers with the median value
+        median_value = df_copy[col].mean()
+        df_copy.loc[outliers, col] = median_value
+    
+    return df_copy

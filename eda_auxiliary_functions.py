@@ -259,7 +259,7 @@ def pivot_from_column_ref(df, index_col, new_columns_ref):
             values=var)
 
         # Rename the columns to include the variable name
-        pivot_df.columns = [f"{var}_{city}" for city in pivot_df.columns]
+        pivot_df.columns = [f"{var}_{city.strip()}" for city in pivot_df.columns]
 
         # Add the pivoted dataframe to the list
         transformed_dfs.append(pivot_df)

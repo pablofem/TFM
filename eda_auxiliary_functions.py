@@ -225,49 +225,21 @@ def check_remove_duplicates(df, subset_elements, keep_type):
     final_rows = len(df)
     duplicated_rows = int(original_rows - final_rows)
     print(
-        f"Se eliminaron {duplicated_rows} registros \
-        duplicados conservando por {keep_type}."
+        f"Se eliminaron {duplicated_rows} registros duplicados conservando por {keep_type}."
     )
     return df
 
 
-def pivot_from_column_ref(df, index_col, new_columns_ref):
-    """
-    Transforms the dataframe to have separate columns
-    for each city and variable combination.
+def check_null_values(df):
+    # Calcular la cantidad de valores nulos por columna
+    null_counts = df.isnull().sum()
+    # Calcular el porcentaje de valores nulos por columna
+    null_percentages = (null_counts / len(df)) * 100
 
-    Parameters:
-    df (pd.DataFrame): The original dataframe with
-    columns 'time', 'city_name', and variables.
+    # Crear un nuevo DataFrame con los resultados
+    result = pd.DataFrame({
+        'null_count': null_counts,
+        'null_percentage': null_percentages
+    }).transpose()
 
-    Returns:
-    pd.DataFrame: The transformed dataframe.
-    """
-
-    variables = df.columns.tolist()
-    variables.remove(index_col)
-    variables.remove(new_columns_ref)
-
-    # Create a list to store the transformed dataframes for each variable
-    transformed_dfs = []
-
-    for var in variables:
-        # Pivot the dataframe for the current variable
-        pivot_df = df.pivot(
-            index=index_col,
-            columns=new_columns_ref,
-            values=var)
-
-        # Rename the columns to include the variable name
-        pivot_df.columns = [f"{var}_{city.strip()}" for city in pivot_df.columns]
-
-        # Add the pivoted dataframe to the list
-        transformed_dfs.append(pivot_df)
-
-    # Concatenate all the transformed dataframes along the columns
-    final_df = pd.concat(transformed_dfs, axis=1)
-
-    # Reset the index to make 'time' a column again
-    final_df.reset_index(inplace=True)
-
-    return final_df
+    return result

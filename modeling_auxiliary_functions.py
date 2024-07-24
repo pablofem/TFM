@@ -4,6 +4,48 @@ import datetime as dt
 from tqdm import tqdm
 
 
+def pivot_from_column_ref(df, index_col, new_columns_ref):
+    """
+    Transforms the dataframe to have separate columns
+    for each city and variable combination.
+
+    Parameters:
+    df (pd.DataFrame): The original dataframe with
+    columns 'time', 'city_name', and variables.
+
+    Returns:
+    pd.DataFrame: The transformed dataframe.
+    """
+
+    variables = df.columns.tolist()
+    variables.remove(index_col)
+    variables.remove(new_columns_ref)
+
+    # Create a list to store the transformed dataframes for each variable
+    transformed_dfs = []
+
+    for var in variables:
+        # Pivot the dataframe for the current variable
+        pivot_df = df.pivot(
+            index=index_col,
+            columns=new_columns_ref,
+            values=var)
+
+        # Rename the columns to include the variable name
+        pivot_df.columns = [f"{var}_{city.strip()}" for city in pivot_df.columns]
+
+        # Add the pivoted dataframe to the list
+        transformed_dfs.append(pivot_df)
+
+    # Concatenate all the transformed dataframes along the columns
+    final_df = pd.concat(transformed_dfs, axis=1)
+
+    # Reset the index to make 'time' a column again
+    final_df.reset_index(inplace=True)
+
+    return final_df
+
+
 def apply_sin_cos_transform(column, column_name, max_val):
     radians = 2 * np.pi * column / max_val
     return pd.DataFrame({
@@ -116,8 +158,8 @@ def prepare_predictor_dataframe(df, start_date, end_date, offer_type, weekly_inf
     return train_predictor_dataframe
 
 
-def get_demand_df(interval_df, dataset):
-    interval_df = interval_df[["time"]]
-    dataset = dataset[["time", "total_load_actual"]]
-    demand_df = pd.merge(interval_df, dataset)
-    return demand_df
+def add_total_demand(interval_dataset, basic_dataset):
+    dataset = basic_dataset[["time", "total_load_actual"]]
+    complete_df = pd.merge(interval_dataset, dataset, how="inner", on="time")
+    complete_df = complete_df[~complete_df["total_load_actual"].isna()]
+    return complete_df

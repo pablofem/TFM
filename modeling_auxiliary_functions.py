@@ -2,6 +2,12 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 from tqdm import tqdm
+from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_regression
 
 
 def pivot_from_column_ref(df, index_col, new_columns_ref):
@@ -163,3 +169,79 @@ def add_total_demand(interval_dataset, basic_dataset):
     complete_df = pd.merge(interval_dataset, dataset, how="inner", on="time")
     complete_df = complete_df[~complete_df["total_load_actual"].isna()]
     return complete_df
+
+
+def train_model(X_train, y_train, model_name):
+    if model_name == "randomForest":
+        model = RandomForestRegressor(random_state=42)
+        param_grid = {
+            'n_estimators': [50, 100, 200],
+            'max_depth': [2, 5, 8],
+            'min_samples_split': [1, 2, 4],
+        }
+    elif model_name == "XGBoost":
+        model = XGBRegressor(objective='reg:squarederror', random_state=42)
+        param_grid = {
+            'n_estimators': [50, 100, 200],
+            'max_depth': [2, 5, 8],
+            'learning_rate': [0.01, 0.1, 0.2],
+        }
+    elif model_name == "MLP":
+        model = MLPRegressor(random_state=42)
+        param_grid = {
+            'hidden_layer_sizes': [(16,), (32,), (64)],
+            'activation': ['relu', 'tanh'],
+            'max_iter': [100, 500, 1000]
+        }
+    else:
+        raise ValueError("Model name must be 'randomForest', 'XGBoost', or 'SVM'.")
+
+    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, n_jobs=-1, scoring='neg_median_absolute_error', verbose=True)
+    grid_search.fit(X_train, y_train)
+
+    best_model = grid_search.best_estimator_
+    return best_model
+
+
+def apply_pca(X, min_variance):
+    """
+    Applies PCA to the input dataframe X and returns a dataframe with 
+    columns: 'components', 'accumulated_variance'. Also returns the 
+    dataframe X reduced to only the components that give at least the min_variance.
+    
+    Parameters:
+    X (pd.DataFrame): The input dataframe with predictor columns.
+    min_variance (float): The minimum variance that must be explained by the selected components.
+    
+    Returns:
+    pca_summary (pd.DataFrame): A dataframe with columns 'components', 'accumulated_variance'.
+    X_reduced (pd.DataFrame): The input dataframe X reduced to the selected components.
+    """
+    pca_transformer = PCA()
+    X_pca = pca_transformer.fit_transform(X)
+    
+    # Calculate accumulated variance
+    cumulative_variance = pca_transformer.explained_variance_ratio_.cumsum()
+    
+    # Determine the number of components required to reach min_variance
+    num_components = (cumulative_variance >= min_variance).argmax() + 1
+    
+    # Create the summary dataframe
+    pca_summary = pd.DataFrame({
+        'components': range(1, len(cumulative_variance) + 1),
+        'accumulated_variance': cumulative_variance
+    })
+    
+    # Reduce the dataset to the selected components
+    X_reduced = pd.DataFrame(X_pca[:, :num_components])
+    
+    return pca_summary, X_reduced, num_components, pca_transformer
+
+
+def keep_k_best(X, y, k):
+    #Initialize SelectKBest with f_classif scoring function (for classification tasks)
+    selector = SelectKBest(score_func=f_regression, k=k)
+    selector.fit(X, y)
+    selected_indices = selector.get_support(indices=True)
+    selected_features = X.columns[selected_indices].tolist()
+    return selected_features

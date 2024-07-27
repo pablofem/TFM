@@ -7,7 +7,6 @@ from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
-from sklearn.feature_selection import SelectKBest, f_regression
 
 
 def pivot_from_column_ref(df, index_col, new_columns_ref):
@@ -164,7 +163,7 @@ def prepare_predictor_dataframe(df, start_date, end_date, offer_type, weekly_inf
     return train_predictor_dataframe
 
 
-def add_total_demand(interval_dataset, basic_dataset):
+def add_total_load(interval_dataset, basic_dataset):
     dataset = basic_dataset[["time", "total_load_actual"]]
     complete_df = pd.merge(interval_dataset, dataset, how="inner", on="time")
     complete_df = complete_df[~complete_df["total_load_actual"].isna()]
@@ -203,10 +202,11 @@ def train_model(X_train, y_train, model_name):
     return best_model
 
 
-def apply_pca(X, min_variance):
+
+def apply_pca(min_variance, X_train, X_test):
     """
-    Applies PCA to the input dataframe X and returns a dataframe with 
-    columns: 'components', 'accumulated_variance'. Also returns the 
+    Applies PCA to the input dataframe X and returns a dataframe with
+    columns: 'components', 'accumulated_variance'. Also returns the
     dataframe X reduced to only the components that give at least the min_variance.
     
     Parameters:
@@ -218,7 +218,8 @@ def apply_pca(X, min_variance):
     X_reduced (pd.DataFrame): The input dataframe X reduced to the selected components.
     """
     pca_transformer = PCA()
-    X_pca = pca_transformer.fit_transform(X)
+    X_train = pca_transformer.fit_transform(X_train)
+    X_test = pca_transformer.transform(X_test)
     
     # Calculate accumulated variance
     cumulative_variance = pca_transformer.explained_variance_ratio_.cumsum()
@@ -233,15 +234,22 @@ def apply_pca(X, min_variance):
     })
     
     # Reduce the dataset to the selected components
-    X_reduced = pd.DataFrame(X_pca[:, :num_components])
+    X_train = pd.DataFrame(X_train[:, :num_components])
+    X_test = pd.DataFrame(X_test[:, :num_components])
     
-    return pca_summary, X_reduced, num_components, pca_transformer
+    return pca_summary, num_components, X_train, X_test
 
 
-def keep_k_best(X, y, k):
-    #Initialize SelectKBest with f_classif scoring function (for classification tasks)
-    selector = SelectKBest(score_func=f_regression, k=k)
-    selector.fit(X, y)
-    selected_indices = selector.get_support(indices=True)
-    selected_features = X.columns[selected_indices].tolist()
-    return selected_features
+def split_train_test_date(data, target_col, sep_date):
+    data = data[~data[target_col].isna()]
+
+    train_data = X_train = data[data["time"] < sep_date]
+    test_data = data[data["time"] >= sep_date]
+
+    X_train = train_data.drop([target_col, "time"], axis=1)
+    y_train = train_data[target_col].values
+
+    X_test = test_data.drop([target_col, "time"], axis=1)
+    y_test = test_data[["time", target_col]]
+
+    return X_train, y_train, X_test, y_test

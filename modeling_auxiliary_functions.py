@@ -5,8 +5,11 @@ from tqdm import tqdm
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
+import scipy.stats as stats
+import matplotlib.pyplot as plt
 
 
 def pivot_from_column_ref(df, index_col, new_columns_ref):
@@ -171,14 +174,14 @@ def add_total_load(interval_dataset, basic_dataset):
 
 
 def train_model(X_train, y_train, model_name):
-    if model_name == "randomForest":
+    if model_name == "RFO":
         model = RandomForestRegressor(random_state=42)
         param_grid = {
             'n_estimators': [50, 100, 200],
             'max_depth': [2, 5, 8],
-            'min_samples_split': [1, 2, 4],
+            'min_samples_split': [2, 4, 8],  # Note: changed from 1 to 2
         }
-    elif model_name == "XGBoost":
+    elif model_name == "XGB":
         model = XGBRegressor(objective='reg:squarederror', random_state=42)
         param_grid = {
             'n_estimators': [50, 100, 200],
@@ -188,13 +191,21 @@ def train_model(X_train, y_train, model_name):
     elif model_name == "MLP":
         model = MLPRegressor(random_state=42)
         param_grid = {
-            'hidden_layer_sizes': [(16,), (32,), (64)],
+            'hidden_layer_sizes': [(16,), (32,), (64,)],
             'activation': ['relu', 'tanh'],
             'max_iter': [100, 500, 1000]
         }
+    elif model_name == "KNN":
+        model = KNeighborsRegressor()
+        param_grid = {
+            'n_neighbors': [3, 5, 7],
+            'weights': ['uniform', 'distance'],
+            'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute']
+        }
     else:
-        raise ValueError("Model name must be 'randomForest', 'XGBoost', or 'SVM'.")
+        raise ValueError("Model name must be 'RFO', 'XGB', 'MLP', or 'KNN'.")
 
+    print(f"Training {model_name} model ...")
     grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, n_jobs=-1, scoring='neg_median_absolute_error', verbose=True)
     grid_search.fit(X_train, y_train)
 
@@ -253,3 +264,71 @@ def split_train_test_date(data, target_col, sep_date):
     y_test = test_data[["time", target_col]]
 
     return X_train, y_train, X_test, y_test
+
+
+def prep_results_df(X_test, y_test, models_dic, offer_type):
+    tmp_df_list = []
+    for model_name, model_predictor in models_dic.items():
+        tmp_df = y_test.copy()
+        tmp_df["prediction"] = model_predictor.predict(X_test).round(0)
+        tmp_df["model"] = model_name
+        tmp_df["offer_type"] = offer_type
+        tmp_df_list.append(tmp_df)
+
+    results_df = pd.concat(tmp_df_list)
+    return results_df
+
+
+def plot_feature_importance(X_train, model):
+
+    # Get feature importances
+    importances = model.feature_importances_
+
+    # Create a DataFrame for feature importances
+    feature_importances_df = pd.DataFrame({
+        'Feature': X_train.columns,
+        'Importance': importances
+    }).sort_values(by='Importance', ascending=False)
+
+    print("================= ANÁLISIS DE IMPORTANCIA DE VARIABLES =================")
+    # Plot feature importances
+    plt.figure(figsize=(6, 3))
+    plt.barh(feature_importances_df['Feature'], feature_importances_df['Importance'])
+    plt.xlabel('Importance')
+    plt.title(f'Feature Importances')
+    plt.gca().invert_yaxis()
+    plt.grid()
+    plt.show()
+
+
+def check_gaussian_residuals(results_df, model_name):
+
+    data = results_df[results_df["model"] == model_name]
+    data = data["total_load_actual"] - data["prediction"]
+    # Shapiro-Wilk Test
+    shapiro_test = stats.shapiro(data)
+
+    # D'Agostino's K-squared Test
+    k2_test = stats.normaltest(data)
+
+    # Conclusion based on p-values
+    alpha = 0.05
+
+    print("================= ANÁLISIS DE RESIDUOS =================")
+
+    if shapiro_test.pvalue > alpha and k2_test.pvalue > alpha:
+        print(f"Los residuos forman una distribución Gaussiana.")
+    else:
+        print(f"Los residuos no forman una distribución Gaussiana.")
+
+    # Kurtosis
+    kurtosis = stats.kurtosis(data, fisher=True)
+
+    if kurtosis > 0:
+        print(f"La distribución es leptocúrtica (K={round(kurtosis,2)})")
+    elif kurtosis < 0:
+        print(f"La distribución es platicúrtica (K={round(kurtosis,2)})")
+    else:
+        print(f"La distribución es mesocúrtica (K={round(kurtosis,2)})")
+
+    print("\n")

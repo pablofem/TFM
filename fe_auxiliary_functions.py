@@ -139,11 +139,11 @@ def get_predictions_timestamps(date, offer_type):
 
     start_timestamp = date
     end_timestamp = date + dt.timedelta(hours=23)
-    if offer_type == "market_offer":
+    if offer_type == "daily_market":
         execution_timestamp = date - dt.timedelta(hours=12)
-    elif offer_type == "first_session":
+    elif offer_type == "third_session":
         execution_timestamp = date - dt.timedelta(hours=1)
-    elif offer_type == "last_session":
+    elif offer_type == "sixth_session":
         execution_timestamp = date + dt.timedelta(hours=12)
         start_timestamp = date + dt.timedelta(hours=13)
 

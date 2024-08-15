@@ -179,7 +179,7 @@ def train_model(X_train, y_train, model_name):
         param_grid = {
             'n_estimators': [50, 100, 200],
             'max_depth': [2, 5, 8],
-            'min_samples_split': [2, 4, 8],  # Note: changed from 1 to 2
+            'min_samples_split': [2, 4, 8],
         }
     elif model_name == "XGB":
         model = XGBRegressor(objective='reg:squarederror', random_state=42)
